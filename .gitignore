@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+dist/
+ruleforge.db
+backend/storage/reports/*
+backend/storage/exports/*
+!backend/storage/reports/.gitkeep
+!backend/storage/exports/.gitkeep
