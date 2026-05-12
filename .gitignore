@@ -8,3 +8,5 @@ backend/storage/reports/*
 backend/storage/exports/*
 !backend/storage/reports/.gitkeep
 !backend/storage/exports/.gitkeep
+.env
+.env.example

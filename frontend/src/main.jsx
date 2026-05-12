@@ -1,8 +1,74 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Upload, FileText, Shield, Download, RefreshCcw } from 'lucide-react';
+import { Upload, FileText, Shield, Download, RefreshCcw, AlertTriangle, Crosshair, Activity, Brain } from 'lucide-react';
 import { api } from './api/client';
 import './styles.css';
+
+
+function parseOverview(summary) {
+  if (!summary) return null;
+  try {
+    const parsed = JSON.parse(summary);
+    if (parsed && typeof parsed === 'object' && parsed.executive_summary) return parsed;
+  } catch (_) {}
+  return {
+    title: 'Basic Summary',
+    executive_summary: summary,
+    threat_actor: 'Unknown',
+    malware_families: [],
+    targeting: 'Not identified',
+    attack_chain: [],
+    key_findings: [],
+    detection_opportunities: [],
+    analyst_notes: ['Legacy/plain-text summary. Reprocess this report to generate the LLM overview.'],
+    confidence: 'low'
+  };
+}
+
+function Pill({ children }) {
+  return <span className="pill">{children}</span>;
+}
+
+function ListBlock({ title, items, icon }) {
+  return <div className="overviewBlock">
+    <div className="blockTitle">{icon}{title}</div>
+    {items?.length ? <ul>{items.map((item, idx) => <li key={idx}>{item}</li>)}</ul> : <p className="muted">Not identified in the report.</p>}
+  </div>;
+}
+
+function Overview({ selected }) {
+  const overview = parseOverview(selected.summary);
+  if (!overview) {
+    return <section className="card"><h3>Overview</h3><p className="summary">Process the report to generate an analyst overview.</p></section>;
+  }
+
+  return <section className="overviewGrid">
+    <div className="heroCard">
+      <div className="eyebrow"><Brain size={16}/> LLM Analyst Brief</div>
+      <h3>{overview.title || selected.title || selected.filename}</h3>
+      <p>{overview.executive_summary}</p>
+      <div className="overviewMeta">
+        <Pill>Confidence: {overview.confidence || 'medium'}</Pill>
+        <Pill>Actor: {overview.threat_actor || 'Unknown'}</Pill>
+        <Pill>{selected.iocs?.length || 0} IOCs</Pill>
+        <Pill>{selected.mappings?.length || 0} MITRE</Pill>
+        <Pill>{selected.detections?.length || 0} Sigma</Pill>
+      </div>
+    </div>
+
+    <div className="sideCard">
+      <h4>Targeting</h4>
+      <p>{overview.targeting || 'Not identified.'}</p>
+      <h4>Malware / Tools</h4>
+      <div className="tagWrap">{overview.malware_families?.length ? overview.malware_families.map(x => <Pill key={x}>{x}</Pill>) : <span className="muted">None identified</span>}</div>
+    </div>
+
+    <ListBlock title="Attack Chain" items={overview.attack_chain} icon={<Activity size={17}/>} />
+    <ListBlock title="Key Findings" items={overview.key_findings} icon={<AlertTriangle size={17}/>} />
+    <ListBlock title="Detection Opportunities" items={overview.detection_opportunities} icon={<Crosshair size={17}/>} />
+    <ListBlock title="Analyst Notes" items={overview.analyst_notes} icon={<FileText size={17}/>} />
+  </section>;
+}
 
 function App() {
   const [reports, setReports] = useState([]);
@@ -101,7 +167,7 @@ function App() {
           {['overview','iocs','mitre','sigma','text'].map(t => <button key={t} className={activeTab === t ? 'active' : ''} onClick={() => setActiveTab(t)}>{t.toUpperCase()}</button>)}
         </nav>
 
-        {activeTab === 'overview' && <section className="card"><h3>Summary</h3><p className="summary">{selected.summary || 'Process the report to generate a summary.'}</p><div className="stats"><span>{selected.iocs?.length || 0} IOCs</span><span>{selected.mappings?.length || 0} MITRE mappings</span><span>{selected.detections?.length || 0} Sigma rules</span></div></section>}
+        {activeTab === 'overview' && <Overview selected={selected} />}
 
         {activeTab === 'iocs' && <section className="card"><h3>Extracted IOCs</h3><table><thead><tr><th>Approved</th><th>Type</th><th>Value</th><th>Confidence</th><th>Context</th></tr></thead><tbody>{selected.iocs?.map(ioc => <tr key={ioc.id}><td><input type="checkbox" checked={ioc.is_approved} onChange={e => saveIoc(ioc, {is_approved: e.target.checked})}/></td><td>{ioc.ioc_type}</td><td><code>{ioc.value}</code></td><td><select value={ioc.confidence} onChange={e => saveIoc(ioc,{confidence:e.target.value})}><option>low</option><option>medium</option><option>high</option></select></td><td>{ioc.source_context}</td></tr>)}</tbody></table></section>}
 

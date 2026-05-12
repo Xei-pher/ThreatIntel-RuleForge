@@ -1,5 +1,6 @@
 import re
 from typing import Dict, List
+from .llm_service import extract_iocs_with_llm
 
 PATTERNS = {
     "ipv4": r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
@@ -17,6 +18,16 @@ PRIVATE_IP_PREFIXES = ("10.", "127.", "169.254.", "192.168.")
 
 def _context(text: str, start: int, end: int, radius: int = 120) -> str:
     return text[max(0, start - radius): min(len(text), end + radius)].replace("\n", " ").strip()
+
+
+def _normalize_ioc(item: Dict) -> Dict:
+    return {
+        "ioc_type": str(item.get("ioc_type", "unknown")).lower().strip(),
+        "value": str(item.get("value", "")).strip().rstrip(".,;:"),
+        "description": str(item.get("description", "Extracted from report text.")).strip(),
+        "confidence": str(item.get("confidence", "medium")).lower().strip(),
+        "source_context": str(item.get("source_context", "")).replace("\n", " ").strip(),
+    }
 
 
 def extract_iocs(text: str) -> List[Dict]:
@@ -40,4 +51,17 @@ def extract_iocs(text: str) -> List[Dict]:
                 "confidence": confidence,
                 "source_context": _context(text, match.start(), match.end()),
             })
+    # LLM extraction adds contextual artifacts such as mutexes, user agents,
+    # malware filenames, services, process names, and behavioral indicators that
+    # regex extraction usually misses. Regex results remain as deterministic fallback.
+    for item in extract_iocs_with_llm(text):
+        normalized = _normalize_ioc(item)
+        if not normalized["value"] or normalized["ioc_type"] == "unknown":
+            continue
+        key = (normalized["ioc_type"], normalized["value"].lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(normalized)
+
     return results

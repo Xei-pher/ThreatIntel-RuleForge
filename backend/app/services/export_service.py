@@ -1,5 +1,6 @@
 from pathlib import Path
 import csv
+import json
 import yaml
 from zipfile import ZipFile
 
@@ -35,6 +36,24 @@ def export_report(report, iocs, mappings, detections) -> str:
         safe_name = "".join(c if c.isalnum() else "_" for c in rule.title.lower())[:80]
         (rules_dir / f"{safe_name}.yml").write_text(rule.rule_content, encoding="utf-8")
 
+    def render_summary(summary_text):
+        if not summary_text:
+            return "No summary generated."
+        try:
+            overview = json.loads(summary_text)
+            lines = [overview.get("executive_summary", "")]
+            lines.append(f"\n**Threat Actor:** {overview.get('threat_actor', 'Unknown')}")
+            lines.append(f"\n**Targeting:** {overview.get('targeting', 'Not identified')}")
+            if overview.get("malware_families"):
+                lines.append("\n**Malware / Tools:** " + ", ".join(overview.get("malware_families", [])))
+            for heading, key in [("Attack Chain", "attack_chain"), ("Key Findings", "key_findings"), ("Detection Opportunities", "detection_opportunities"), ("Analyst Notes", "analyst_notes")]:
+                items = overview.get(key, []) or []
+                if items:
+                    lines.append(f"\n## {heading}\n" + "\n".join([f"- {item}" for item in items]))
+            return "\n".join(lines)
+        except Exception:
+            return summary_text
+
     md_path = base / "summary.md"
     md_path.write_text(f"""# Threat Intelligence Extraction Report
 
@@ -45,7 +64,7 @@ def export_report(report, iocs, mappings, detections) -> str:
 
 ## Summary
 
-{report.summary or 'No summary generated.'}
+{render_summary(report.summary)}
 
 ## IOC Count
 

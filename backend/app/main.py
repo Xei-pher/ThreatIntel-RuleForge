@@ -3,6 +3,9 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pathlib import Path
+import json
+import logging
+import os
 import shutil
 
 from .database import Base, engine, get_db
@@ -13,6 +16,13 @@ from .services.ioc_service import extract_iocs
 from .services.mitre_service import map_mitre
 from .services.rule_service import generate_sigma_rules
 from .services.export_service import export_report
+from .services.llm_service import llm_status, test_llm_connection, generate_overview_with_llm
+
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger("ruleforge.api")
 
 Base.metadata.create_all(bind=engine)
 
@@ -31,7 +41,11 @@ STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "llm": llm_status()}
+
+@app.get("/llm/health")
+def llm_health():
+    return test_llm_connection()
 
 @app.post("/reports/upload", response_model=ReportOut)
 async def upload_report(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -73,24 +87,39 @@ def process_report(report_id: int, db: Session = Depends(get_db)):
     db.query(DetectionRule).filter(DetectionRule.report_id == report_id).delete()
     db.commit()
 
+    logger.info("Processing report_id=%s filename=%s", report.id, report.filename)
     text = extract_text_from_pdf(report.file_path)
+    logger.info("PDF extraction complete report_id=%s text_chars=%s", report.id, len(text or ""))
     report.raw_text = text
-    report.summary = text[:900] + ("..." if len(text) > 900 else "")
+
+    overview = generate_overview_with_llm(text, report.filename)
+    logger.info(
+        "Overview generation complete report_id=%s title=%s confidence=%s",
+        report.id,
+        overview.get("title"),
+        overview.get("confidence"),
+    )
+    report.title = overview.get("title") or report.title
+    report.summary = json.dumps(overview, ensure_ascii=False)
 
     iocs = extract_iocs(text)
+    logger.info("IOC extraction complete report_id=%s count=%s", report.id, len(iocs))
     for item in iocs:
         db.add(IOC(report_id=report.id, **item))
 
     mappings = map_mitre(text)
+    logger.info("MITRE mapping complete report_id=%s count=%s", report.id, len(mappings))
     for item in mappings:
         db.add(MitreMapping(report_id=report.id, **item))
 
     db.flush()
-    rules = generate_sigma_rules(iocs, mappings)
+    rules = generate_sigma_rules(iocs, mappings, text)
+    logger.info("Sigma generation complete report_id=%s count=%s", report.id, len(rules))
     for item in rules:
         db.add(DetectionRule(report_id=report.id, **item))
 
     report.processing_status = "processed"
+    logger.info("Processing finished report_id=%s", report.id)
     db.commit()
     db.refresh(report)
     return report

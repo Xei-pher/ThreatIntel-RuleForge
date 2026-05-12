@@ -1,4 +1,5 @@
 from typing import Dict, List
+from .llm_service import map_mitre_with_llm
 
 KEYWORD_MAP = [
     ("powershell", "T1059.001", "Command and Scripting Interpreter: PowerShell"),
@@ -19,6 +20,15 @@ KEYWORD_MAP = [
 ]
 
 
+def _normalize_mapping(item: Dict) -> Dict:
+    return {
+        "technique_id": str(item.get("technique_id", "")).upper().strip(),
+        "technique_name": str(item.get("technique_name", "")).strip(),
+        "evidence": str(item.get("evidence", "")).replace("\n", " ").strip(),
+        "confidence": str(item.get("confidence", "medium")).lower().strip(),
+    }
+
+
 def map_mitre(text: str) -> List[Dict]:
     lower = text.lower()
     mappings = []
@@ -34,4 +44,12 @@ def map_mitre(text: str) -> List[Dict]:
                 "evidence": evidence,
                 "confidence": "medium",
             })
+    for item in map_mitre_with_llm(text):
+        normalized = _normalize_mapping(item)
+        tid = normalized["technique_id"]
+        if not tid or not tid.startswith("T") or tid in seen:
+            continue
+        seen.add(tid)
+        mappings.append(normalized)
+
     return mappings

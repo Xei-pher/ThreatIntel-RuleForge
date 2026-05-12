@@ -99,3 +99,73 @@ Next serious upgrade:
 - No production deployment configuration yet.
 
 This is a strong MVP foundation, not the final commercial-grade product.
+
+## Optional LLM Integration
+
+The backend now supports OpenAI-powered extraction and detection generation. The app still works without an API key because the original regex/keyword/Sigma fallback logic remains in place.
+
+### Enable LLM mode
+
+From the backend folder:
+
+```powershell
+copy .env.example .env
+notepad .env
+```
+
+Add your key:
+
+```env
+OPENAI_API_KEY=sk-your-key-here
+OPENAI_MODEL=gpt-4.1-mini
+LLM_MAX_REPORT_CHARS=60000
+```
+
+Then reinstall backend dependencies:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### What the LLM now powers
+
+- `ioc_service.py`: regex extraction plus LLM extraction for contextual IOCs such as mutexes, filenames, user agents, service names, and process names.
+- `mitre_service.py`: keyword mapping plus LLM-based ATT&CK mapping with evidence and confidence.
+- `rule_service.py`: LLM-generated Sigma rules first; validated fallback Sigma rules if the LLM fails or no API key exists.
+- `llm_service.py`: shared OpenAI client, JSON-only prompting, error-safe fallback behavior.
+
+### Important behavior
+
+If the LLM call fails, the app does not crash. It prints `[LLM_DISABLED_OR_FAILED]` in the backend terminal and falls back to the deterministic MVP logic.
+
+
+## LLM debugging
+
+After adding your `OPENAI_API_KEY` to `backend/.env`, restart the backend and test:
+
+```powershell
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/llm/health
+```
+
+Expected `llm/health` result:
+
+```json
+{
+  "enabled": true,
+  "ok": true,
+  "message": "llm reachable"
+}
+```
+
+If LLM calls fail, the backend now prints full debug logs in the Uvicorn terminal for these tasks:
+
+- `ioc_extraction`
+- `mitre_mapping`
+- `sigma_generation`
+- `health_check`
+
+Important: keep `LOG_LEVEL=DEBUG` and `LLM_DEBUG=true` while troubleshooting. Turn `LLM_DEBUG=false` later because it can log model outputs.

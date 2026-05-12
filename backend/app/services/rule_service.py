@@ -1,9 +1,10 @@
 import yaml
 from typing import Dict, List
 from datetime import date
+from .llm_service import generate_sigma_with_llm
 
 
-def generate_sigma_rules(iocs: List[Dict], mitre: List[Dict]) -> List[Dict]:
+def _fallback_sigma_rules(iocs: List[Dict], mitre: List[Dict]) -> List[Dict]:
     rules = []
     grouped = {}
     for ioc in iocs:
@@ -52,3 +53,33 @@ def generate_sigma_rules(iocs: List[Dict], mitre: List[Dict]) -> List[Dict]:
             "status": "draft",
         })
     return rules
+
+
+def _valid_llm_rule(rule: Dict) -> bool:
+    required = {"rule_type", "title", "description", "severity", "rule_content", "status"}
+    if not isinstance(rule, dict) or not required.issubset(rule.keys()):
+        return False
+    if str(rule.get("rule_type", "")).lower() != "sigma":
+        return False
+    try:
+        parsed = yaml.safe_load(rule.get("rule_content") or "")
+        return isinstance(parsed, dict) and "title" in parsed and "detection" in parsed
+    except Exception:
+        return False
+
+
+def generate_sigma_rules(iocs: List[Dict], mitre: List[Dict], report_text: str = "") -> List[Dict]:
+    llm_rules = []
+    if report_text:
+        for rule in generate_sigma_with_llm(iocs, mitre, report_text):
+            if _valid_llm_rule(rule):
+                llm_rules.append({
+                    "rule_type": "sigma",
+                    "title": str(rule.get("title"))[:255],
+                    "description": str(rule.get("description", "")),
+                    "severity": str(rule.get("severity", "medium")).lower(),
+                    "mitre_technique": rule.get("mitre_technique"),
+                    "rule_content": rule.get("rule_content"),
+                    "status": str(rule.get("status", "draft")).lower(),
+                })
+    return llm_rules or _fallback_sigma_rules(iocs, mitre)
