@@ -309,7 +309,7 @@ SIGMA_SCHEMA = {
 
 def extract_iocs_with_llm(report_text: str) -> List[Dict[str, str]]:
     system = """You are a senior cyber threat intelligence analyst.
-Extract only security-relevant indicators of compromise from threat reports.
+Extract only security-relevant indicators of compromise from threat reports, keep in mind the context or any false positives
 Return strict JSON only. Do not invent indicators. Use evidence from the report text only."""
     user = f"""
 Extract IOCs from this threat report.
