@@ -23,13 +23,13 @@ import {
   Eye,
   TerminalSquare
 } from 'lucide-react';
-import { api } from './api/client';
+import { api, describeApiError, API_BASE_URL } from './api/client';
 import './styles.css';
 
 const PROCESS_STEPS = [
   { label: 'Extracting PDF text', detail: 'Reading pages and normalizing report text' },
   { label: 'Building analyst overview', detail: 'Generating executive summary, attack chain, findings, and notes' },
-  { label: 'Extracting IOCs', detail: 'Finding domains, URLs, IPs, hashes, paths, registry keys, and more' },
+  { label: 'Extracting IOCs', detail: 'Finding domains, URLs, IPs, hashes, paths, registry keys, filtering noise, and enriching public IPs' },
   { label: 'Mapping MITRE ATT&CK', detail: 'Matching behaviors to likely techniques with evidence' },
   { label: 'Generating Sigma rules', detail: 'Creating reviewable detection logic from the report intelligence' },
   { label: 'Finalizing report package', detail: 'Saving results for review and export' }
@@ -149,7 +149,7 @@ function HomePage({ reports, selected, onSelectReport, onUploadClick }) {
     <section className="landingHero">
       <div>
         <div className="eyebrow"><Sparkles size={16}/> Threat Report to Detection Engineering</div>
-        <h2>Turn threat reports into reviewable Sigma detections.</h2>
+        <h2>Turn PDF threat intelligence into reviewable Sigma detections.</h2>
         <p>Upload a report, extract IOCs, map ATT&CK techniques, generate rules, and export the package for analyst review.</p>
         <div className="heroActions">
           <button className="primaryBtn" onClick={onUploadClick}><FileUp size={17}/> Upload New Report</button>
@@ -242,6 +242,7 @@ function ReportWorkspace({ selected, loading, activeTab, setActiveTab, processRe
 
     <section className="workspaceStats">
       <StatCard icon={<Crosshair size={20}/>} label="IOCs" value={selected.iocs?.length || 0} />
+      <StatCard icon={<Database size={20}/>} label="Enriched IOCs" value={selected.iocs?.filter(i => i.enrichment_source).length || 0} />
       <StatCard icon={<BarChart3 size={20}/>} label="MITRE Mappings" value={selected.mappings?.length || 0} />
       <StatCard icon={<Shield size={20}/>} label="Sigma Rules" value={selected.detections?.length || 0} />
     </section>
@@ -252,7 +253,7 @@ function ReportWorkspace({ selected, loading, activeTab, setActiveTab, processRe
 
     {activeTab === 'overview' && <Overview selected={selected} />}
 
-    {activeTab === 'iocs' && <section className="card"><div className="sectionHead"><h3>Extracted IOCs</h3><span>{selected.iocs?.length || 0} indicators</span></div><div className="tableWrap"><table><thead><tr><th>Approved</th><th>Type</th><th>Value</th><th>Confidence</th><th>Context</th></tr></thead><tbody>{selected.iocs?.map(ioc => <tr key={ioc.id}><td><input type="checkbox" checked={ioc.is_approved} onChange={e => saveIoc(ioc, {is_approved: e.target.checked})}/></td><td>{ioc.ioc_type}</td><td><code>{ioc.value}</code></td><td><select value={ioc.confidence} onChange={e => saveIoc(ioc,{confidence:e.target.value})}><option>low</option><option>medium</option><option>high</option></select></td><td>{ioc.source_context}</td></tr>)}</tbody></table></div></section>}
+    {activeTab === 'iocs' && <section className="card"><div className="sectionHead"><h3>Extracted IOCs</h3><span>{selected.iocs?.length || 0} indicators · {selected.iocs?.filter(i => i.enrichment_source).length || 0} enriched</span></div><div className="tableWrap"><table><thead><tr><th>Approved</th><th>Type</th><th>Value</th><th>Confidence</th><th>Enrichment</th><th>Context</th></tr></thead><tbody>{selected.iocs?.map(ioc => <tr key={ioc.id}><td><input type="checkbox" checked={ioc.is_approved} onChange={e => saveIoc(ioc, {is_approved: e.target.checked})}/></td><td>{ioc.ioc_type}</td><td><code>{ioc.value}</code></td><td><select value={ioc.confidence} onChange={e => saveIoc(ioc,{confidence:e.target.value})}><option>low</option><option>medium</option><option>high</option></select></td><td>{ioc.enrichment_summary ? <span className="enrichmentBadge">{ioc.enrichment_summary}</span> : <span className="muted">Not enriched</span>}</td><td>{ioc.source_context}</td></tr>)}</tbody></table></div></section>}
 
     {activeTab === 'mitre' && <section className="card"><div className="sectionHead"><h3>MITRE ATT&CK Mapping</h3><span>{selected.mappings?.length || 0} techniques</span></div><div className="tableWrap"><table><thead><tr><th>Technique</th><th>Name</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>{selected.mappings?.map(m => <tr key={m.id}><td><code>{m.technique_id}</code></td><td>{m.technique_name}</td><td>{m.confidence}</td><td>{m.evidence}</td></tr>)}</tbody></table></div></section>}
 
@@ -270,6 +271,7 @@ function App() {
   const [activePage, setActivePage] = useState('home');
   const [activeTab, setActiveTab] = useState('overview');
   const [error, setError] = useState('');
+  const [apiHealth, setApiHealth] = useState(null);
   const [progress, setProgress] = useState(0);
 
   const loadReports = async () => {
@@ -285,7 +287,12 @@ function App() {
     setActivePage(page);
   };
 
-  useEffect(() => { loadReports().catch(console.error); }, []);
+  useEffect(() => {
+    api.get('/health')
+      .then(res => setApiHealth(res.data))
+      .catch(e => setError(describeApiError(e)));
+    loadReports().catch(e => setError(describeApiError(e)));
+  }, []);
 
   useEffect(() => {
     if (!loading) return;
@@ -313,7 +320,7 @@ function App() {
       await loadReport(res.data.id);
       setFile(null);
       setActivePage('workspace');
-    } catch (e) { setError(e.response?.data?.detail || e.message); }
+    } catch (e) { setError(describeApiError(e)); }
     finally { setProgress(100); setTimeout(() => setLoading(false), 250); }
   };
 
@@ -325,7 +332,7 @@ function App() {
       setProgress(100);
       setSelected(res.data);
       await loadReports();
-    } catch (e) { setError(e.response?.data?.detail || e.message); }
+    } catch (e) { setError(describeApiError(e)); }
     finally { setTimeout(() => setLoading(false), 350); }
   };
 
@@ -369,6 +376,8 @@ function App() {
       <div className="sidebarFooter">
         <p><b>{reports.length}</b> reports stored</p>
         <p><b>{reports.filter(r => r.processing_status === 'processed').length}</b> processed</p>
+        <p className="apiBase">API: {API_BASE_URL}</p>
+        {apiHealth && <p className="apiOk">Backend: {apiHealth.status}</p>}
       </div>
     </aside>
 

@@ -1,6 +1,7 @@
 import re
 from typing import Dict, List
 from .llm_service import extract_iocs_with_llm
+from .ioc_filter_service import filter_iocs
 
 PATTERNS = {
     "ipv4": r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
@@ -14,7 +15,6 @@ PATTERNS = {
     "registry_key": r"\bHKEY_(?:LOCAL_MACHINE|CURRENT_USER|CLASSES_ROOT|USERS|CURRENT_CONFIG)\\[^\r\n]+",
 }
 
-PRIVATE_IP_PREFIXES = ("10.", "127.", "169.254.", "192.168.")
 
 def _context(text: str, start: int, end: int, radius: int = 120) -> str:
     return text[max(0, start - radius): min(len(text), end + radius)].replace("\n", " ").strip()
@@ -36,10 +36,7 @@ def extract_iocs(text: str) -> List[Dict]:
     for ioc_type, pattern in PATTERNS.items():
         for match in re.finditer(pattern, text, flags=re.IGNORECASE):
             value = match.group(0).strip().rstrip(".,;:")
-            if ioc_type == "ipv4" and value.startswith(PRIVATE_IP_PREFIXES):
-                confidence = "low"
-            else:
-                confidence = "high" if ioc_type in {"sha256", "sha1", "md5", "url"} else "medium"
+            confidence = "high" if ioc_type in {"sha256", "sha1", "md5", "url"} else "medium"
             key = (ioc_type, value.lower())
             if key in seen:
                 continue
@@ -64,4 +61,9 @@ def extract_iocs(text: str) -> List[Dict]:
         seen.add(key)
         results.append(normalized)
 
-    return results
+
+    filtered, removed = filter_iocs(results)
+    if removed:
+        import logging
+        logging.getLogger("ruleforge.ioc").info("IOC quality filter removed count=%s samples=%s", len(removed), removed[:10])
+    return filtered

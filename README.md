@@ -169,3 +169,69 @@ If LLM calls fail, the backend now prints full debug logs in the Uvicorn termina
 - `health_check`
 
 Important: keep `LOG_LEVEL=DEBUG` and `LLM_DEBUG=true` while troubleshooting. Turn `LLM_DEBUG=false` later because it can log model outputs.
+
+## IOC Quality Filtering + VirusTotal Enrichment
+
+This build filters noisy/non-actionable IOCs before saving them and before rule generation.
+
+Filtered by default:
+- Private/non-public IPv4 addresses, including 10.x.x.x, 172.16-31.x.x, 192.168.x.x, loopback, link-local, multicast, reserved, documentation/test ranges, etc.
+- Common report publisher/reference domains such as dfirreport.com, MITRE, VirusTotal, GitHub raw links, and similar sources.
+- Duplicate IOCs.
+
+To customize domain filtering, edit `backend/.env`:
+
+```env
+IOC_DOMAIN_DENYLIST=dfirreport.com,www.dfirreport.com,thedfirreport.com,www.thedfirreport.com,attack.mitre.org,mitre.org,virustotal.com,www.virustotal.com,github.com,raw.githubusercontent.com
+IOC_DOMAIN_ALLOWLIST=
+```
+
+### VirusTotal API key
+
+Add your VirusTotal key in `backend/.env`:
+
+```env
+VIRUSTOTAL_API_KEY=your_virustotal_key_here
+VT_TIMEOUT_SECONDS=20
+```
+
+Only public IPv4 IOCs are enriched in this version. Private/local IPs are filtered out and never sent to VirusTotal.
+
+Check config:
+
+```powershell
+curl http://127.0.0.1:8000/virustotal/health
+curl http://127.0.0.1:8000/health
+```
+
+Reprocess a report after adding the API key to populate enrichment fields.
+
+
+## Network Error Troubleshooting
+
+The frontend now displays the exact backend URL it is trying to reach in the sidebar. By default it uses:
+
+```text
+http://127.0.0.1:8000
+```
+
+Before using the UI, confirm these URLs work in your browser:
+
+```text
+http://127.0.0.1:8000/health
+http://127.0.0.1:8000/docs
+```
+
+If the frontend is running from a different host/port, set this in `frontend/.env`:
+
+```env
+VITE_API_URL=http://127.0.0.1:8000
+```
+
+Then restart Vite.
+
+For CORS changes, set this in `backend/.env`:
+
+```env
+CORS_ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://0.0.0.0:5173
+```

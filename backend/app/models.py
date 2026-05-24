@@ -28,6 +28,9 @@ class IOC(Base):
     confidence = Column(String, default="medium")
     source_context = Column(Text, nullable=True)
     is_approved = Column(Boolean, default=True)
+    enrichment_source = Column(String, nullable=True)
+    enrichment_summary = Column(Text, nullable=True)
+    enrichment_json = Column(Text, nullable=True)
     report = relationship("Report", back_populates="iocs")
 
 class MitreMapping(Base):

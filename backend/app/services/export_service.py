@@ -15,9 +15,9 @@ def export_report(report, iocs, mappings, detections) -> str:
     csv_path = base / "iocs.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["type", "value", "confidence", "approved", "context"])
+        writer.writerow(["type", "value", "confidence", "approved", "enrichment_source", "enrichment_summary", "context"])
         for ioc in iocs:
-            writer.writerow([ioc.ioc_type, ioc.value, ioc.confidence, ioc.is_approved, ioc.source_context])
+            writer.writerow([ioc.ioc_type, ioc.value, ioc.confidence, ioc.is_approved, ioc.enrichment_source, ioc.enrichment_summary, ioc.source_context])
 
     mitre_path = base / "mitre_mapping.yaml"
     with mitre_path.open("w", encoding="utf-8") as f:

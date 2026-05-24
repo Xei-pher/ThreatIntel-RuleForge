@@ -10,6 +10,9 @@ class IOCOut(BaseModel):
     confidence: str
     source_context: Optional[str]
     is_approved: bool
+    enrichment_source: Optional[str] = None
+    enrichment_summary: Optional[str] = None
+    enrichment_json: Optional[str] = None
     class Config:
         from_attributes = True
 
