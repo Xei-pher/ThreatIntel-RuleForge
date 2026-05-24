@@ -235,3 +235,8 @@ For CORS changes, set this in `backend/.env`:
 ```env
 CORS_ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://0.0.0.0:5173
 ```
+
+
+## Export contents
+
+The ZIP export includes `iocs.csv`, `mitre_mapping.yaml`, `mitre_mapping.json`, `attack_navigator_layer.json`, `summary.md`, and Sigma rule YAML files. Upload `attack_navigator_layer.json` directly into MITRE ATT&CK Navigator.
