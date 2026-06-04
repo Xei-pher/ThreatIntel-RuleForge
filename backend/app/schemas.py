@@ -49,6 +49,18 @@ class DetectionUpdate(BaseModel):
     rule_content: Optional[str] = None
     status: Optional[str] = None
 
+class AgentRunOut(BaseModel):
+    id: int
+    agent_name: str
+    iteration: int
+    success: bool
+    notes: Optional[str]
+    score: Optional[float] = None
+    critique: Optional[str] = None
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
 class ReportOut(BaseModel):
     id: int
     filename: str
@@ -57,6 +69,9 @@ class ReportOut(BaseModel):
     processing_status: str
     summary: Optional[str]
     raw_text: Optional[str] = None
+    report_markdown: Optional[str] = None
+    judge_score: Optional[float] = None
+    judge_iterations: Optional[int] = None
     class Config:
         from_attributes = True
 
