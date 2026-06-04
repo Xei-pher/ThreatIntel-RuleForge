@@ -19,6 +19,7 @@ from .services.rule_service import generate_sigma_rules
 from .services.export_service import export_report
 from .services.llm_service import llm_status, test_llm_connection, generate_overview_with_llm
 from .services.virustotal_service import vt_status, enrich_ip
+from .services.judge_service import judge_status, judge_iocs, judge_mitre_mappings, judge_sigma_rules
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -39,11 +40,36 @@ def ensure_sqlite_columns():
                 "enrichment_source": "ALTER TABLE iocs ADD COLUMN enrichment_source VARCHAR",
                 "enrichment_summary": "ALTER TABLE iocs ADD COLUMN enrichment_summary TEXT",
                 "enrichment_json": "ALTER TABLE iocs ADD COLUMN enrichment_json TEXT",
+                "judge_decision": "ALTER TABLE iocs ADD COLUMN judge_decision VARCHAR",
+                "judge_score": "ALTER TABLE iocs ADD COLUMN judge_score INTEGER",
+                "judge_reason": "ALTER TABLE iocs ADD COLUMN judge_reason TEXT",
             }
             for column, ddl in additions.items():
                 if column not in columns:
                     conn.execute(sql_text(ddl))
                     logger.info("Applied local DB migration: added iocs.%s", column)
+
+            mapping_columns = {row[1] for row in conn.execute(sql_text("PRAGMA table_info(mitre_mappings)"))}
+            mapping_additions = {
+                "judge_decision": "ALTER TABLE mitre_mappings ADD COLUMN judge_decision VARCHAR",
+                "judge_score": "ALTER TABLE mitre_mappings ADD COLUMN judge_score INTEGER",
+                "judge_reason": "ALTER TABLE mitre_mappings ADD COLUMN judge_reason TEXT",
+            }
+            for column, ddl in mapping_additions.items():
+                if column not in mapping_columns:
+                    conn.execute(sql_text(ddl))
+                    logger.info("Applied local DB migration: added mitre_mappings.%s", column)
+
+            detection_columns = {row[1] for row in conn.execute(sql_text("PRAGMA table_info(detection_rules)"))}
+            detection_additions = {
+                "judge_decision": "ALTER TABLE detection_rules ADD COLUMN judge_decision VARCHAR",
+                "judge_score": "ALTER TABLE detection_rules ADD COLUMN judge_score INTEGER",
+                "judge_reason": "ALTER TABLE detection_rules ADD COLUMN judge_reason TEXT",
+            }
+            for column, ddl in detection_additions.items():
+                if column not in detection_columns:
+                    conn.execute(sql_text(ddl))
+                    logger.info("Applied local DB migration: added detection_rules.%s", column)
         except Exception as exc:
             logger.warning("Local DB migration skipped/error: %s", exc)
 
@@ -73,7 +99,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "llm": llm_status(), "virustotal": vt_status()}
+    return {"status": "ok", "llm": llm_status(), "judge": judge_status(), "virustotal": vt_status()}
 
 @app.get("/llm/health")
 def llm_health():
@@ -82,6 +108,10 @@ def llm_health():
 @app.get("/virustotal/health")
 def virustotal_health():
     return vt_status()
+
+@app.get("/judge/health")
+def judge_health():
+    return judge_status()
 
 @app.post("/reports/upload", response_model=ReportOut)
 async def upload_report(file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -140,6 +170,8 @@ def process_report(report_id: int, db: Session = Depends(get_db)):
 
     iocs = extract_iocs(text)
     logger.info("IOC extraction complete report_id=%s count=%s", report.id, len(iocs))
+    iocs = judge_iocs(text, iocs)
+    logger.info("IOC judge complete report_id=%s kept_count=%s", report.id, len(iocs))
     for item in iocs:
         enrichment = None
         if item.get("ioc_type") in {"ipv4", "ip", "ip_address"}:
@@ -162,12 +194,16 @@ def process_report(report_id: int, db: Session = Depends(get_db)):
 
     mappings = map_mitre(text)
     logger.info("MITRE mapping complete report_id=%s count=%s", report.id, len(mappings))
+    mappings = judge_mitre_mappings(text, mappings)
+    logger.info("MITRE judge complete report_id=%s kept_count=%s", report.id, len(mappings))
     for item in mappings:
         db.add(MitreMapping(report_id=report.id, **item))
 
     db.flush()
     rules = generate_sigma_rules(iocs, mappings, text)
     logger.info("Sigma generation complete report_id=%s count=%s", report.id, len(rules))
+    rules = judge_sigma_rules(text, rules)
+    logger.info("Sigma judge complete report_id=%s kept_count=%s", report.id, len(rules))
     for item in rules:
         db.add(DetectionRule(report_id=report.id, **item))
 

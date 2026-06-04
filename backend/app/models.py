@@ -31,6 +31,9 @@ class IOC(Base):
     enrichment_source = Column(String, nullable=True)
     enrichment_summary = Column(Text, nullable=True)
     enrichment_json = Column(Text, nullable=True)
+    judge_decision = Column(String, nullable=True)
+    judge_score = Column(Integer, nullable=True)
+    judge_reason = Column(Text, nullable=True)
     report = relationship("Report", back_populates="iocs")
 
 class MitreMapping(Base):
@@ -41,6 +44,9 @@ class MitreMapping(Base):
     technique_name = Column(String, nullable=False)
     evidence = Column(Text, nullable=True)
     confidence = Column(String, default="medium")
+    judge_decision = Column(String, nullable=True)
+    judge_score = Column(Integer, nullable=True)
+    judge_reason = Column(Text, nullable=True)
     report = relationship("Report", back_populates="mappings")
 
 class DetectionRule(Base):
@@ -54,4 +60,7 @@ class DetectionRule(Base):
     mitre_technique = Column(String, nullable=True)
     rule_content = Column(Text, nullable=False)
     status = Column(String, default="draft")
+    judge_decision = Column(String, nullable=True)
+    judge_score = Column(Integer, nullable=True)
+    judge_reason = Column(Text, nullable=True)
     report = relationship("Report", back_populates="detections")

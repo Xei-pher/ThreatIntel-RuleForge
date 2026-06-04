@@ -13,6 +13,9 @@ class IOCOut(BaseModel):
     enrichment_source: Optional[str] = None
     enrichment_summary: Optional[str] = None
     enrichment_json: Optional[str] = None
+    judge_decision: Optional[str] = None
+    judge_score: Optional[int] = None
+    judge_reason: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -27,6 +30,9 @@ class MitreOut(BaseModel):
     technique_name: str
     evidence: Optional[str]
     confidence: str
+    judge_decision: Optional[str] = None
+    judge_score: Optional[int] = None
+    judge_reason: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -39,6 +45,9 @@ class DetectionOut(BaseModel):
     mitre_technique: Optional[str]
     rule_content: str
     status: str
+    judge_decision: Optional[str] = None
+    judge_score: Optional[int] = None
+    judge_reason: Optional[str] = None
     class Config:
         from_attributes = True
 

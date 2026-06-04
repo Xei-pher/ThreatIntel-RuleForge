@@ -186,7 +186,7 @@ function HomePage({ reports, selected, onSelectReport, onUploadClick }) {
       <div className="card elevated">
         <div className="sectionHead"><h3>MVP Pipeline</h3><span>Current build</span></div>
         <div className="pipelineList">
-          {['PDF upload', 'Text extraction', 'LLM overview', 'IOC extraction', 'MITRE mapping', 'Sigma generation', 'CSV/YAML/Markdown export'].map(x => <div key={x}><CheckCircle2 size={17}/><span>{x}</span></div>)}
+          {['PDF upload', 'Text extraction', 'LLM overview', 'IOC extraction', 'Judge QA', 'MITRE mapping', 'Sigma generation', 'CSV/YAML/Markdown export'].map(x => <div key={x}><CheckCircle2 size={17}/><span>{x}</span></div>)}
         </div>
       </div>
     </section>
@@ -224,6 +224,12 @@ function ReportsPage({ reports, selected, onSelectReport }) {
   </div>;
 }
 
+function JudgeBadge({ item }) {
+  if (!item?.judge_decision) return <span className="muted">Not judged</span>;
+  const cls = item.judge_decision === 'accepted' ? 'judgeAccepted' : item.judge_decision === 'review' ? 'judgeReview' : 'judgeRejected';
+  return <span className={`judgeBadge ${cls}`} title={item.judge_reason || ''}>AI Judge: {item.judge_decision} · {item.judge_score ?? 'n/a'}</span>;
+}
+
 function ReportWorkspace({ selected, loading, activeTab, setActiveTab, processReport, exportReport, saveIoc, saveRule }) {
   if (!selected) return <EmptyState icon={<FileText size={34}/>} title="No report selected" text="Choose a previous report or upload a new PDF." />;
 
@@ -243,6 +249,7 @@ function ReportWorkspace({ selected, loading, activeTab, setActiveTab, processRe
     <section className="workspaceStats">
       <StatCard icon={<Crosshair size={20}/>} label="IOCs" value={selected.iocs?.length || 0} />
       <StatCard icon={<Database size={20}/>} label="Enriched IOCs" value={selected.iocs?.filter(i => i.enrichment_source).length || 0} />
+      <StatCard icon={<CheckCircle2 size={20}/>} label="Judge Accepted" value={[...(selected.iocs || []), ...(selected.mappings || []), ...(selected.detections || [])].filter(x => x.judge_decision === 'accepted').length} />
       <StatCard icon={<BarChart3 size={20}/>} label="MITRE Mappings" value={selected.mappings?.length || 0} />
       <StatCard icon={<Shield size={20}/>} label="Sigma Rules" value={selected.detections?.length || 0} />
     </section>
@@ -253,11 +260,11 @@ function ReportWorkspace({ selected, loading, activeTab, setActiveTab, processRe
 
     {activeTab === 'overview' && <Overview selected={selected} />}
 
-    {activeTab === 'iocs' && <section className="card"><div className="sectionHead"><h3>Extracted IOCs</h3><span>{selected.iocs?.length || 0} indicators · {selected.iocs?.filter(i => i.enrichment_source).length || 0} enriched</span></div><div className="tableWrap"><table><thead><tr><th>Approved</th><th>Type</th><th>Value</th><th>Confidence</th><th>Enrichment</th><th>Context</th></tr></thead><tbody>{selected.iocs?.map(ioc => <tr key={ioc.id}><td><input type="checkbox" checked={ioc.is_approved} onChange={e => saveIoc(ioc, {is_approved: e.target.checked})}/></td><td>{ioc.ioc_type}</td><td><code>{ioc.value}</code></td><td><select value={ioc.confidence} onChange={e => saveIoc(ioc,{confidence:e.target.value})}><option>low</option><option>medium</option><option>high</option></select></td><td>{ioc.enrichment_summary ? <span className="enrichmentBadge">{ioc.enrichment_summary}</span> : <span className="muted">Not enriched</span>}</td><td>{ioc.source_context}</td></tr>)}</tbody></table></div></section>}
+    {activeTab === 'iocs' && <section className="card"><div className="sectionHead"><h3>Extracted IOCs</h3><span>{selected.iocs?.length || 0} indicators · {selected.iocs?.filter(i => i.enrichment_source).length || 0} enriched · {selected.iocs?.filter(i => i.judge_decision === 'review').length || 0} review</span></div><div className="tableWrap"><table><thead><tr><th>Approved</th><th>Judge</th><th>Type</th><th>Value</th><th>Confidence</th><th>Enrichment</th><th>Context</th></tr></thead><tbody>{selected.iocs?.map(ioc => <tr key={ioc.id}><td><input type="checkbox" checked={ioc.is_approved} onChange={e => saveIoc(ioc, {is_approved: e.target.checked})}/></td><td><JudgeBadge item={ioc}/></td><td>{ioc.ioc_type}</td><td><code>{ioc.value}</code></td><td><select value={ioc.confidence} onChange={e => saveIoc(ioc,{confidence:e.target.value})}><option>low</option><option>medium</option><option>high</option></select></td><td>{ioc.enrichment_summary ? <span className="enrichmentBadge">{ioc.enrichment_summary}</span> : <span className="muted">Not enriched</span>}</td><td>{ioc.source_context}</td></tr>)}</tbody></table></div></section>}
 
-    {activeTab === 'mitre' && <section className="card"><div className="sectionHead"><h3>MITRE ATT&CK Mapping</h3><span>{selected.mappings?.length || 0} techniques</span></div><div className="tableWrap"><table><thead><tr><th>Technique</th><th>Name</th><th>Confidence</th><th>Evidence</th></tr></thead><tbody>{selected.mappings?.map(m => <tr key={m.id}><td><code>{m.technique_id}</code></td><td>{m.technique_name}</td><td>{m.confidence}</td><td>{m.evidence}</td></tr>)}</tbody></table></div></section>}
+    {activeTab === 'mitre' && <section className="card"><div className="sectionHead"><h3>MITRE ATT&CK Mapping</h3><span>{selected.mappings?.length || 0} techniques</span></div><div className="tableWrap"><table><thead><tr><th>Technique</th><th>Name</th><th>Confidence</th><th>Judge</th><th>Evidence</th></tr></thead><tbody>{selected.mappings?.map(m => <tr key={m.id}><td><code>{m.technique_id}</code></td><td>{m.technique_name}</td><td>{m.confidence}</td><td><JudgeBadge item={m}/></td><td>{m.evidence}</td></tr>)}</tbody></table></div></section>}
 
-    {activeTab === 'sigma' && <section className="card"><div className="sectionHead"><h3>Sigma Rules</h3><span>{selected.detections?.length || 0} rules</span></div>{selected.detections?.map(rule => <div className="rule" key={rule.id}><div className="ruleHead"><input value={rule.title} onChange={e => saveRule(rule,{title:e.target.value})}/><select value={rule.severity} onChange={e => saveRule(rule,{severity:e.target.value})}><option>low</option><option>medium</option><option>high</option><option>critical</option></select></div><textarea value={rule.rule_content} onChange={e => saveRule(rule,{rule_content:e.target.value})}/></div>)}</section>}
+    {activeTab === 'sigma' && <section className="card"><div className="sectionHead"><h3>Sigma Rules</h3><span>{selected.detections?.length || 0} rules · {selected.detections?.filter(r => r.judge_decision === 'review').length || 0} review</span></div>{selected.detections?.map(rule => <div className="rule" key={rule.id}><div className="ruleHead"><input value={rule.title} onChange={e => saveRule(rule,{title:e.target.value})}/><select value={rule.severity} onChange={e => saveRule(rule,{severity:e.target.value})}><option>low</option><option>medium</option><option>high</option><option>critical</option></select><JudgeBadge item={rule}/></div><textarea value={rule.rule_content} onChange={e => saveRule(rule,{rule_content:e.target.value})}/></div>)}</section>}
 
     {activeTab === 'text' && <section className="card"><div className="sectionHead"><h3>Extracted Text</h3><span>{selected.raw_text?.length || 0} chars</span></div><pre>{selected.raw_text || 'No text extracted yet.'}</pre></section>}
   </>;
