@@ -1,20 +1,27 @@
-# ThreatIntel RuleForge MVP
+# ThreatIntel RuleForge
 
-A local web application that ingests PDF threat reports, extracts text and IOCs, maps basic MITRE ATT&CK techniques, generates Sigma rules, and exports CSV/YAML/Markdown assets as a ZIP.
+A local web application that ingests PDF threat intelligence reports, runs them through a **supervisor-controlled multi-agent LLM pipeline**, and exports analysis-ready assets.
 
-## MVP Features
+## Features
 
-- PDF upload
-- PDF text extraction
-- IOC extraction
-- MITRE ATT&CK heuristic mapping
-- Sigma rule generation
-- Human review/editing in the UI
+- PDF upload and text extraction (PyMuPDF)
+- **Multi-agent pipeline** — six specialised agents orchestrated by a supervisor:
+  - **PDFReaderAgent** — extracts raw text from uploaded PDFs
+  - **IOCExtractorAgent** — LLM-powered extraction of all IOC categories (IPs, domains, URLs, hashes, paths, mutexes, user agents, process names, CVEs, and more)
+  - **MITREAgent** — maps observed TTPs to MITRE ATT&CK Enterprise techniques
+  - **SigmaRuleAgent** — generates production-quality Sigma detection rules
+  - **ReportGeneratorAgent** — produces a SOC analyst-ready Markdown report
+  - **JudgeAgent** — evaluates and scores all outputs against the source material; triggers selective redo of failing agents until a 90 % accuracy threshold is met
+- VirusTotal enrichment for public IPv4 IOCs
+- IOC quality filtering (private IPs, publisher domains, duplicates)
+- Human review and inline editing of IOCs and Sigma rules in the UI
 - Export to ZIP containing:
   - `iocs.csv`
-  - `mitre_mapping.yaml`
+  - `mitre_mapping.yaml` / `mitre_mapping.json`
+  - `attack_navigator_layer.json` (MITRE ATT&CK Navigator)
+  - `sigma_rules/` directory of individual Sigma YAML files
   - `summary.md`
-  - Sigma rule YAML files
+  - `soc_report.md` — full SOC analyst report (new)
 
 ## Project Structure
 
@@ -22,17 +29,36 @@ A local web application that ingests PDF threat reports, extracts text and IOCs,
 threatintel-ruleforge/
   backend/
     app/
-      main.py
-      models.py
-      schemas.py
-      database.py
+      main.py               # FastAPI application and API routes
+      models.py             # SQLAlchemy ORM models (Report, IOC, MitreMapping, DetectionRule, AgentRun)
+      schemas.py            # Pydantic response schemas
+      database.py           # SQLite engine and session
+      agents/               # Multi-agent pipeline
+        base.py             # AgentContext, AgentResult, JudgeVerdict, BaseAgent
+        pdf_reader.py       # PDFReaderAgent
+        ioc_extractor.py    # IOCExtractorAgent
+        mitre_agent.py      # MITREAgent
+        sigma_agent.py      # SigmaRuleAgent
+        report_generator.py # ReportGeneratorAgent
+        judge.py            # JudgeAgent
+        supervisor.py       # AgentSupervisor (orchestration + iteration loop)
+      providers/            # Provider-agnostic LLM abstraction
+        base.py             # LLMProvider ABC, LLMMessage, LLMProviderError
+        openai_provider.py  # OpenAI (GPT-4o, GPT-4.1-mini, …)
+        anthropic_provider.py # Anthropic Claude
+        groq_provider.py    # Groq (OpenAI-compatible)
+        fireworks_provider.py # Fireworks AI (OpenAI-compatible)
+        ollama_provider.py  # Ollama (local, stdlib urllib)
+        factory.py          # get_provider() factory
       services/
-        pdf_service.py
-        ioc_service.py
-        mitre_service.py
-        rule_service.py
-        export_service.py
+        pdf_service.py      # PyMuPDF text extraction helper
+        ioc_service.py      # IOC normalisation helper
+        ioc_filter_service.py # IOC quality filter
+        virustotal_service.py # VirusTotal IP enrichment
+        export_service.py   # ZIP export builder
+        llm_service.py      # LLM status and health-check utilities
     requirements.txt
+    .env.example
   frontend/
     src/
       main.jsx
@@ -48,18 +74,30 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+Copy and configure the environment file:
+
+```bash
+cp .env.example .env
+# Edit .env and set LLM_PROVIDER + the corresponding API key (required)
+```
+
+Start the server:
+
+```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
 Backend health check:
 
-```text
+```
 http://localhost:8000/health
 ```
 
 API docs:
 
-```text
+```
 http://localhost:8000/docs
 ```
 
@@ -73,170 +111,153 @@ npm run dev
 
 Open:
 
-```text
+```
 http://localhost:5173
 ```
 
-## Important Notes
+## LLM Provider Configuration
 
-This MVP intentionally does not use an LLM yet. The extraction and mapping are rule-based so you can test the workflow without API keys.
+**An LLM provider is required.** Reports cannot be processed without one.
 
-Next serious upgrade:
+Set `LLM_PROVIDER` in `backend/.env` to one of:
 
-1. Add LLM structured extraction for intelligence fields.
-2. Add LLM-assisted Sigma generation with schema validation.
-3. Add Sigma validation using `sigma-cli` or pySigma.
-4. Add OCR fallback for scanned reports.
-5. Add IOC enrichment with VirusTotal, OTX, AbuseIPDB, URLhaus.
-6. Add authentication and project workspaces.
+| Value | Provider | Required env var |
+|---|---|---|
+| `openai` (default) | OpenAI | `OPENAI_API_KEY` |
+| `anthropic` | Anthropic Claude | `ANTHROPIC_API_KEY` |
+| `groq` | Groq | `GROQ_API_KEY` |
+| `fireworks` | Fireworks AI | `FIREWORKS_API_KEY` |
+| `ollama` | Ollama (local) | `OLLAMA_BASE_URL` (no key needed) |
 
-## Current Limitations
-
-- MITRE mapping is keyword-based.
-- Sigma generation is IOC-based and generic.
-- OCR is not implemented yet.
-- No user authentication yet.
-- No production deployment configuration yet.
-
-This is a strong MVP foundation, not the final commercial-grade product.
-
-## Optional LLM Integration
-
-The backend now supports OpenAI-powered extraction and detection generation. The app still works without an API key because the original regex/keyword/Sigma fallback logic remains in place.
-
-### Enable LLM mode
-
-From the backend folder:
-
-```powershell
-copy .env.example .env
-notepad .env
-```
-
-Add your key:
+Example for OpenAI:
 
 ```env
+LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-your-key-here
-OPENAI_MODEL=gpt-4.1-mini
-LLM_MAX_REPORT_CHARS=60000
+OPENAI_MODEL=gpt-4o-mini
 ```
 
-Then reinstall backend dependencies:
-
-```powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-### What the LLM now powers
-
-- `ioc_service.py`: regex extraction plus LLM extraction for contextual IOCs such as mutexes, filenames, user agents, service names, and process names.
-- `mitre_service.py`: keyword mapping plus LLM-based ATT&CK mapping with evidence and confidence.
-- `rule_service.py`: LLM-generated Sigma rules first; validated fallback Sigma rules if the LLM fails or no API key exists.
-- `llm_service.py`: shared OpenAI client, JSON-only prompting, error-safe fallback behavior.
-
-### Important behavior
-
-If the LLM call fails, the app does not crash. It prints `[LLM_DISABLED_OR_FAILED]` in the backend terminal and falls back to the deterministic MVP logic.
-
-
-## LLM debugging
-
-After adding your `OPENAI_API_KEY` to `backend/.env`, restart the backend and test:
-
-```powershell
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/llm/health
-```
-
-Expected `llm/health` result:
-
-```json
-{
-  "enabled": true,
-  "ok": true,
-  "message": "llm reachable"
-}
-```
-
-If LLM calls fail, the backend now prints full debug logs in the Uvicorn terminal for these tasks:
-
-- `ioc_extraction`
-- `mitre_mapping`
-- `sigma_generation`
-- `health_check`
-
-Important: keep `LOG_LEVEL=DEBUG` and `LLM_DEBUG=true` while troubleshooting. Turn `LLM_DEBUG=false` later because it can log model outputs.
-
-## IOC Quality Filtering + VirusTotal Enrichment
-
-This build filters noisy/non-actionable IOCs before saving them and before rule generation.
-
-Filtered by default:
-- Private/non-public IPv4 addresses, including 10.x.x.x, 172.16-31.x.x, 192.168.x.x, loopback, link-local, multicast, reserved, documentation/test ranges, etc.
-- Common report publisher/reference domains such as dfirreport.com, MITRE, VirusTotal, GitHub raw links, and similar sources.
-- Duplicate IOCs.
-
-To customize domain filtering, edit `backend/.env`:
+Example for Ollama:
 
 ```env
-IOC_DOMAIN_DENYLIST=dfirreport.com,www.dfirreport.com,thedfirreport.com,www.thedfirreport.com,attack.mitre.org,mitre.org,virustotal.com,www.virustotal.com,github.com,raw.githubusercontent.com
-IOC_DOMAIN_ALLOWLIST=
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1
 ```
 
-### VirusTotal API key
+Check provider connectivity:
 
-Add your VirusTotal key in `backend/.env`:
+```
+http://localhost:8000/llm/health
+```
+
+## Agent Supervisor Configuration
+
+```env
+# Enable or disable the Judge Agent.
+# Set to false to skip scoring and run the pipeline as a single pass (useful when hitting rate limits).
+JUDGE_AGENT_ACTIVE=true
+
+# Minimum Judge score (0–100) required to accept pipeline output (default: 90)
+JUDGE_PASS_SCORE=90.0
+
+# Maximum judge-supervised iterations before accepting best result (default: 3)
+JUDGE_MAX_ITERATIONS=3
+```
+
+The supervisor runs agents sequentially. After all agents complete an iteration, the JudgeAgent evaluates all outputs and scores them against the source material. If the score is below `JUDGE_PASS_SCORE`, only the agents flagged by the Judge are re-executed with the critique injected into their prompts. This continues until the score passes or `JUDGE_MAX_ITERATIONS` is reached.
+
+Set `JUDGE_AGENT_ACTIVE=false` to disable the Judge entirely. The pipeline will run once and accept the result without scoring — this eliminates the additional LLM call per iteration and is recommended when working under tight API rate limits.
+
+## Rate Limit Handling
+
+All LLM calls include automatic retry with exponential backoff when a rate-limit or quota error is detected (HTTP 429, `rate limit`, `too many requests`, `tokens per minute`, etc.). The retry behaviour is fully configurable:
+
+```env
+# Maximum number of retries after a rate-limit error (default: 4)
+LLM_RATE_LIMIT_MAX_RETRIES=4
+
+# Seconds to wait before the first retry (default: 5)
+LLM_RATE_LIMIT_INITIAL_WAIT=5.0
+
+# Multiplier applied to the wait time on each subsequent retry (default: 2 = exponential backoff)
+LLM_RATE_LIMIT_BACKOFF_FACTOR=2.0
+
+# Maximum wait ceiling in seconds between retries (default: 60)
+LLM_RATE_LIMIT_MAX_WAIT=60.0
+```
+
+With defaults the wait sequence is: 5 s → 10 s → 20 s → 40 s → 60 s (capped). If all retries are exhausted the agent falls back gracefully and the pipeline continues. Non-rate-limit errors are not retried.
+
+## API Endpoints
+
+### Existing (unchanged response schema)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Health + LLM + VirusTotal status |
+| `GET` | `/llm/health` | LLM provider connectivity check |
+| `POST` | `/reports/upload` | Upload a PDF |
+| `GET` | `/reports` | List all reports |
+| `GET` | `/reports/{id}` | Get report detail |
+| `POST` | `/reports/{id}/process` | Run the multi-agent pipeline |
+| `GET` | `/reports/{id}/iocs` | List IOCs |
+| `PATCH` | `/iocs/{id}` | Update an IOC |
+| `GET` | `/reports/{id}/detections` | List Sigma rules |
+| `PATCH` | `/detections/{id}` | Update a Sigma rule |
+| `POST` | `/reports/{id}/export` | Download ZIP export |
+
+### New
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/reports/{id}/agent-runs` | Full agent execution audit log (all iterations) |
+| `GET` | `/reports/{id}/report-md` | SOC analyst Markdown report (`text/markdown`) |
+
+## VirusTotal Enrichment
 
 ```env
 VIRUSTOTAL_API_KEY=your_virustotal_key_here
 VT_TIMEOUT_SECONDS=20
 ```
 
-Only public IPv4 IOCs are enriched in this version. Private/local IPs are filtered out and never sent to VirusTotal.
+Only public IPv4 IOCs are enriched. Private, loopback, and reserved IPs are filtered out before enrichment.
 
-Check config:
-
-```powershell
-curl http://127.0.0.1:8000/virustotal/health
-curl http://127.0.0.1:8000/health
-```
-
-Reprocess a report after adding the API key to populate enrichment fields.
-
-
-## Network Error Troubleshooting
-
-The frontend now displays the exact backend URL it is trying to reach in the sidebar. By default it uses:
-
-```text
-http://127.0.0.1:8000
-```
-
-Before using the UI, confirm these URLs work in your browser:
-
-```text
-http://127.0.0.1:8000/health
-http://127.0.0.1:8000/docs
-```
-
-If the frontend is running from a different host/port, set this in `frontend/.env`:
+## IOC Filtering
 
 ```env
-VITE_API_URL=http://127.0.0.1:8000
+# Additional domains to block (comma-separated)
+IOC_DOMAIN_DENYLIST=
+
+# Domains to always keep regardless of other rules
+IOC_DOMAIN_ALLOWLIST=
 ```
 
-Then restart Vite.
-
-For CORS changes, set this in `backend/.env`:
+## Debugging
 
 ```env
-CORS_ALLOW_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://0.0.0.0:5173
+LOG_LEVEL=DEBUG
+LLM_DEBUG=true   # logs raw LLM outputs (may log sensitive data — disable in production)
 ```
 
+## Current Limitations
 
-## Export contents
+- OCR not implemented — scanned/image-based PDFs are flagged as `[OCR_REQUIRED]`
+- VirusTotal enrichment covers IPv4 only (domain, URL, hash enrichment not yet implemented)
+- No user authentication
+- Processing is synchronous — large reports with multiple judge iterations may take several minutes
+- Parallel agent execution is not supported
+- API rate limits: set `JUDGE_AGENT_ACTIVE=false` and/or increase `LLM_RATE_LIMIT_INITIAL_WAIT` if you are consistently hitting provider rate limits
 
-The ZIP export includes `iocs.csv`, `mitre_mapping.yaml`, `mitre_mapping.json`, `attack_navigator_layer.json`, `summary.md`, and Sigma rule YAML files. Upload `attack_navigator_layer.json` directly into MITRE ATT&CK Navigator.
+## Export ZIP Contents
+
+```
+report_{id}_export.zip
+  iocs.csv                    IOC table with enrichment data
+  mitre_mapping.yaml          MITRE ATT&CK mappings (YAML)
+  mitre_mapping.json          MITRE ATT&CK mappings (JSON)
+  attack_navigator_layer.json ATT&CK Navigator layer (upload to navigator.attack.mitre.org)
+  sigma_rules/                Individual Sigma YAML files (one per rule)
+  summary.md                  Legacy overview summary
+  soc_report.md               Full SOC analyst report (generated by ReportGeneratorAgent)
+```

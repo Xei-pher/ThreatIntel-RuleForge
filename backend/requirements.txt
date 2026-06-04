@@ -6,4 +6,7 @@ pydantic==2.10.4
 PyMuPDF==1.25.1
 PyYAML==6.0.2
 
+# LLM providers
 openai>=1.99.0
+anthropic>=0.28.0
+python-dotenv>=1.0.0
