@@ -83,12 +83,9 @@ This MVP intentionally does not use an LLM yet. The extraction and mapping are r
 
 Next serious upgrade:
 
-1. Add LLM structured extraction for intelligence fields.
-2. Add LLM-assisted Sigma generation with schema validation.
-3. Add Sigma validation using `sigma-cli` or pySigma.
-4. Add OCR fallback for scanned reports.
-5. Add IOC enrichment with VirusTotal, OTX, AbuseIPDB, URLhaus.
-6. Add authentication and project workspaces.
+1. Add Sigma validation using `sigma-cli` or pySigma.
+2. Add OCR fallback for scanned reports.
+3. Add authentication and project workspaces.
 
 ## Current Limitations
 
