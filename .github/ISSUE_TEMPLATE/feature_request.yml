@@ -1,0 +1,24 @@
+name: Feature request
+description: Propose an improvement to RuleForge
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the analyst or detection-engineering problem this feature would address.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Describe the behavior you want and any alternatives you considered.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Security and detection-quality considerations
+      description: Note likely false-positive, data-handling, or trust-boundary impact.

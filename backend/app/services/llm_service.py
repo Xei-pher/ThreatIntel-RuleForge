@@ -21,20 +21,12 @@ LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 LLM_DEBUG = os.getenv("LLM_DEBUG", "false").lower() in {"1", "true", "yes", "y"}
 
 
-def _mask_key(key: str) -> str:
-    if not key:
-        return "missing"
-    if len(key) <= 12:
-        return "set-but-too-short"
-    return f"{key[:7]}...{key[-4:]}"
-
-
 def llm_status() -> Dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY", "")
     return {
         "enabled": bool(api_key) and OpenAI is not None,
+        "configured": bool(api_key),
         "openai_package_installed": OpenAI is not None,
-        "api_key": _mask_key(api_key),
         "model": DEFAULT_MODEL,
         "max_report_chars": MAX_REPORT_CHARS,
         "timeout_seconds": LLM_TIMEOUT_SECONDS,

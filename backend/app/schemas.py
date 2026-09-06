@@ -1,8 +1,14 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
 
-class IOCOut(BaseModel):
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ORMModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+
+class IOCOut(ORMModel):
     id: int
     ioc_type: str
     value: str
@@ -16,15 +22,15 @@ class IOCOut(BaseModel):
     judge_decision: Optional[str] = None
     judge_score: Optional[int] = None
     judge_reason: Optional[str] = None
-    class Config:
-        from_attributes = True
+
 
 class IOCUpdate(BaseModel):
     description: Optional[str] = None
     confidence: Optional[str] = None
     is_approved: Optional[bool] = None
 
-class MitreOut(BaseModel):
+
+class MitreOut(ORMModel):
     id: int
     technique_id: str
     technique_name: str
@@ -33,10 +39,9 @@ class MitreOut(BaseModel):
     judge_decision: Optional[str] = None
     judge_score: Optional[int] = None
     judge_reason: Optional[str] = None
-    class Config:
-        from_attributes = True
 
-class DetectionOut(BaseModel):
+
+class DetectionOut(ORMModel):
     id: int
     rule_type: str
     title: str
@@ -48,8 +53,7 @@ class DetectionOut(BaseModel):
     judge_decision: Optional[str] = None
     judge_score: Optional[int] = None
     judge_reason: Optional[str] = None
-    class Config:
-        from_attributes = True
+
 
 class DetectionUpdate(BaseModel):
     title: Optional[str] = None
@@ -58,7 +62,8 @@ class DetectionUpdate(BaseModel):
     rule_content: Optional[str] = None
     status: Optional[str] = None
 
-class ReportOut(BaseModel):
+
+class ReportOut(ORMModel):
     id: int
     filename: str
     title: Optional[str]
@@ -66,10 +71,9 @@ class ReportOut(BaseModel):
     processing_status: str
     summary: Optional[str]
     raw_text: Optional[str] = None
-    class Config:
-        from_attributes = True
+
 
 class ReportDetail(ReportOut):
-    iocs: List[IOCOut] = []
-    mappings: List[MitreOut] = []
-    detections: List[DetectionOut] = []
+    iocs: List[IOCOut] = Field(default_factory=list)
+    mappings: List[MitreOut] = Field(default_factory=list)
+    detections: List[DetectionOut] = Field(default_factory=list)

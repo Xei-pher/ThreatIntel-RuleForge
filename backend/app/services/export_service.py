@@ -52,13 +52,13 @@ def build_attack_navigator_layer(report, mappings):
     return {
         "name": f"RuleForge - {report.title or report.filename}",
         "versions": {
-            "attack": "16",
-            "navigator": "5.1.0",
+            "attack": "19.1",
+            "navigator": "5.3.2",
             "layer": "4.5",
         },
         "domain": "enterprise-attack",
         "description": f"ATT&CK Navigator layer generated from {report.filename} by ThreatIntel RuleForge. Scores: low=33, medium=66, high=100.",
-        "filters": {"platforms": ["Windows", "Linux", "macOS", "Network", "PRE", "Containers", "Office 365", "SaaS", "IaaS", "Azure AD", "Google Workspace"]},
+        "filters": {"platforms": ["Windows", "Linux", "macOS", "Network", "PRE", "Containers", "Office 365", "Google Workspace", "IaaS"]},
         "sorting": 0,
         "layout": {"layout": "side", "aggregateFunction": "average", "showID": False, "showName": True},
         "hideDisabled": False,

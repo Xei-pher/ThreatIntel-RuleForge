@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import Dict, List
 from .llm_service import extract_iocs_with_llm
@@ -64,6 +65,5 @@ def extract_iocs(text: str) -> List[Dict]:
 
     filtered, removed = filter_iocs(results)
     if removed:
-        import logging
-        logging.getLogger("ruleforge.ioc").info("IOC quality filter removed count=%s samples=%s", len(removed), removed[:10])
+        logging.getLogger("ruleforge.ioc").info("IOC quality filter removed count=%s", len(removed))
     return filtered

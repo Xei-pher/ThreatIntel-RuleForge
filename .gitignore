@@ -1,12 +1,38 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
 .venv/
+venv/
+
+# Node / Vite
 node_modules/
 dist/
-ruleforge.db
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!backend/.env.example
+
+# Local application state
+backend/ruleforge.db
 backend/storage/reports/*
 backend/storage/exports/*
 !backend/storage/reports/.gitkeep
 !backend/storage/exports/.gitkeep
-.env
-.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs / coverage
+*.log
+coverage/
+.coverage
+htmlcov/

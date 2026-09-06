@@ -15,19 +15,11 @@ VT_BASE_URL = "https://www.virustotal.com/api/v3"
 VT_TIMEOUT_SECONDS = float(os.getenv("VT_TIMEOUT_SECONDS", "20"))
 
 
-def _mask_key(key: str) -> str:
-    if not key:
-        return "missing"
-    if len(key) <= 12:
-        return "set-but-too-short"
-    return f"{key[:6]}...{key[-4:]}"
-
-
 def vt_status() -> Dict[str, Any]:
     key = os.getenv("VIRUSTOTAL_API_KEY", "")
     return {
         "enabled": bool(key),
-        "api_key": _mask_key(key),
+        "configured": bool(key),
         "timeout_seconds": VT_TIMEOUT_SECONDS,
     }
 

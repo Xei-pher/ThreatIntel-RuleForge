@@ -5,7 +5,7 @@ KEYWORD_MAP = [
     ("powershell", "T1059.001", "Command and Scripting Interpreter: PowerShell"),
     ("cmd.exe", "T1059.003", "Command and Scripting Interpreter: Windows Command Shell"),
     ("scheduled task", "T1053.005", "Scheduled Task/Job: Scheduled Task"),
-    ("registry run", "T1060", "Registry Run Keys / Startup Folder"),
+    ("registry run", "T1547.001", "Boot or Logon Autostart Execution: Registry Run Keys / Startup Folder"),
     ("rundll32", "T1218.011", "System Binary Proxy Execution: Rundll32"),
     ("mshta", "T1218.005", "System Binary Proxy Execution: Mshta"),
     ("phishing", "T1566", "Phishing"),

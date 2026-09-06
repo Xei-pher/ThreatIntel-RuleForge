@@ -96,7 +96,7 @@ def _apply_evaluations(items: List[Dict], evaluations: List[Dict], item_kind: st
 
         if normalized_decision == "rejected":
             rejected += 1
-            logger.info("Judge rejected %s idx=%s score=%s reason=%s item=%s", item_kind, idx, score, reason, item)
+            logger.info("Judge rejected %s idx=%s score=%s reason=%s", item_kind, idx, score, reason)
             continue
 
         copy = dict(item)
